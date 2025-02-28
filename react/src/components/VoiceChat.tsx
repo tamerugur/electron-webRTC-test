@@ -11,7 +11,7 @@ function VoiceChat(props: voiceChatProps) {
         width: props.chatWidth,
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
+        alignItems: "flex-start",
         backgroundColor: "#303136",
         borderTopLeftRadius: "10px",
         borderBottomLeftRadius: "10px"
