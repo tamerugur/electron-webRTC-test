@@ -1,6 +1,7 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import path from "path";
-const { screen } = require('electron');
+import * as fs from "fs";
+const { screen } = require("electron");
 
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -16,17 +17,42 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.js"),
-      devTools: true
+      devTools: true,
     },
   });
-  win.webContents.on('before-input-event', (event, input) => {
-    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+  win.webContents.on("before-input-event", (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === "i") {
       win.webContents.toggleDevTools();
     }
   });
   win.setMenu(null);
   win.loadURL("http://localhost:5173");
 }
+
+const chatLogPath = path.join(__dirname, "../chat-log.txt");
+
+ipcMain.handle("save-chat-log", async (_, messages) => {
+  try {
+    await fs.promises.writeFile(chatLogPath, JSON.stringify(messages));
+    return true;
+  } catch (error) {
+    console.error("Failed to save chat log:", error);
+    return false;
+  }
+});
+
+ipcMain.handle("load-chat-log", async () => {
+  try {
+    if (!fs.existsSync(chatLogPath)) {
+      return [];
+    }
+    const data = await fs.promises.readFile(chatLogPath, "utf-8");
+    return JSON.parse(data);
+  } catch (error) {
+    console.error("Failed to load chat log:", error);
+    return [];
+  }
+});
 
 app.whenReady().then(createWindow);
 

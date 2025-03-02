@@ -15,11 +15,21 @@ interface Message {
   sender: string;
 }
 
+declare global {
+  interface Window {
+    chatAPI: {
+      saveChatLog: (messages: Message[]) => Promise<boolean>;
+      loadChatLog: () => Promise<Message[]>;
+    };
+  }
+}
+
 function Chat(props: voiceChatProps) {
   console.log("Chat component loaded");
   const [channel, setChannel] = useState<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const socket = new Socket("ws://localhost:4000/socket");
@@ -42,6 +52,26 @@ function Chat(props: voiceChatProps) {
       socket.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  useEffect(() => {
+    const loadMessages = async () => {
+      const savedMessages = await window.chatAPI.loadChatLog();
+      setMessages(savedMessages);
+    };
+    loadMessages();
+  }, []);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      window.chatAPI.saveChatLog(messages);
+    }
+  }, [messages]);
 
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp)
@@ -93,6 +123,7 @@ function Chat(props: voiceChatProps) {
       }}
     >
       <div
+        ref={messagesEndRef}
         style={{
           flex: 1,
           width: "100%",
@@ -102,6 +133,27 @@ function Chat(props: voiceChatProps) {
           boxSizing: "border-box",
         }}
       >
+        <style>
+          {`
+          ::-webkit-scrollbar-button {
+            display: none;
+          }
+
+          ::-webkit-scrollbar {
+            width: 9px; /* Adjust scrollbar width */
+          }
+
+          ::-webkit-scrollbar-track {
+            background: #2B2D31;
+          }
+
+          ::-webkit-scrollbar-thumb {
+            background: #1A1B1E;
+            border-radius: 10px;
+          }
+          }
+        `}
+        </style>
         {messages.map((msg, index) => (
           <div
             key={msg.timestamp}
@@ -136,7 +188,7 @@ function Chat(props: voiceChatProps) {
             >
               {msg.sender}:
             </div>
-            <div 
+            <div
               style={{
                 color: "white",
                 fontSize: "14px",
