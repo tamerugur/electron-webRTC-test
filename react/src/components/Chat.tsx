@@ -1,3 +1,7 @@
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Socket } from "phoenix";
+
+// project imports
 import sendIcon from "../assets/sendIcon.svg";
 
 interface voiceChatProps {
@@ -5,7 +9,79 @@ interface voiceChatProps {
   chatWidth: string;
 }
 
+interface Message {
+  text: string;
+  timestamp: number;
+  sender: string;
+}
+
 function Chat(props: voiceChatProps) {
+  console.log("Chat component loaded");
+  const [channel, setChannel] = useState<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+
+  useEffect(() => {
+    const socket = new Socket("ws://localhost:4000/socket");
+    socket.connect();
+
+    const channel = socket.channel("room:lobby", {});
+    channel
+      .join()
+      .receive("ok", () => console.log("Connected to WebSocket!"))
+      .receive("error", (err) => console.error("Connection error:", err));
+
+    channel.on("signal", (payload) => {
+      console.log("Received signal:", payload);
+    });
+
+    setChannel(channel);
+
+    return () => {
+      channel.leave();
+      socket.disconnect();
+    };
+  }, []);
+
+  const formatTimestamp = (timestamp: number) => {
+    return new Date(timestamp)
+      .toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      })
+      .toUpperCase();
+  };
+
+  const shouldShowTimestamp = (index: number) => {
+    if (index === 0) return true;
+    const prevMessage = messages[index - 1];
+    const currentMessage = messages[index];
+    return currentMessage.timestamp - prevMessage.timestamp > 60000;
+  };
+
+  const sendMessage = useCallback(() => {
+    if (inputRef.current && channel && inputRef.current.value.trim()) {
+      const newMessage = {
+        text: inputRef.current.value,
+        timestamp: Date.now(),
+        sender: "User",
+      };
+      channel.push("signal", { message: newMessage.text });
+      setMessages((prev) => [...prev, newMessage]);
+      inputRef.current.value = "";
+    }
+  }, [channel]);
+
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    },
+    [sendMessage]
+  );
+
   return (
     <div
       style={{
@@ -22,8 +98,55 @@ function Chat(props: voiceChatProps) {
           width: "100%",
           margin: "0",
           overflow: "auto",
+          padding: "20px",
+          boxSizing: "border-box",
         }}
-      ></div>
+      >
+        {messages.map((msg, index) => (
+          <div
+            key={msg.timestamp}
+            style={{
+              display: "flex",
+              marginBottom: "4px",
+              paddingLeft: "10px",
+              alignItems: "baseline",
+              fontSize: "18px",
+              lineHeight: "1.5",
+            }}
+          >
+            <div
+              style={{
+                minWidth: "45px",
+                color: "#808080",
+                fontSize: "12px",
+                height: "100%",
+                display: "flex",
+                alignItems: "baseline",
+              }}
+            >
+              {shouldShowTimestamp(index) ? formatTimestamp(msg.timestamp) : ""}
+            </div>
+            <div
+              style={{
+                color: "#4752C4",
+                marginRight: "4px",
+                fontWeight: "bold",
+                fontSize: "18px",
+              }}
+            >
+              {msg.sender}:
+            </div>
+            <div 
+              style={{
+                color: "white",
+                fontSize: "14px",
+              }}
+            >
+              {msg.text}
+            </div>
+          </div>
+        ))}
+      </div>
       <div
         style={{
           display: "flex",
@@ -35,6 +158,8 @@ function Chat(props: voiceChatProps) {
       >
         <input
           type="text"
+          ref={inputRef}
+          onKeyDown={handleKeyPress}
           style={{
             width: `${props.chatWidth}`,
             padding: "12px",
@@ -51,6 +176,7 @@ function Chat(props: voiceChatProps) {
           placeholder="Type your message..."
         />
         <button
+          onClick={sendMessage}
           style={{
             position: "absolute",
             right: "8px",
